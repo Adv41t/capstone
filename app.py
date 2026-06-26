@@ -2,6 +2,7 @@ import os
 import json
 import streamlit as st
 import google.api_core.exceptions
+import google.generativeai as genai
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_random_exponential, retry_if_exception
 
@@ -104,7 +105,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Generate a default contract PDF in the backend if not present
-STATIC_CONTRACT_PATH = "contract.pdf"
+STATIC_CONTRACT_PATH = r"C:\Users\advai\OneDrive\Desktop\Capstone\healthcare-auditor\clinical_laboratory_agreement.pdf"
 
 def generate_default_contract(filepath: str) -> None:
     """Generates a default mock contract PDF if it doesn't exist."""
@@ -200,41 +201,34 @@ if api_key and not st.session_state["contract_indexed"]:
         st.error("Static contract file ('contract.pdf') was not found in the root directory.")
 
 # Sidebar config
-st.sidebar.image("https://img.icons8.com/external-flatart-icons-lineal-color-flatart-icons/128/external-medical-insurance-medical-health-flatart-icons-lineal-color-flatart-icons.png", width=80)
 st.sidebar.title("Auditing Engine")
-st.sidebar.markdown("**Environment**: Production Backend")
 
 if st.session_state["contract_indexed"]:
-    st.sidebar.success("📚 **Legal Contract**: Loaded & Indexed (Static)")
+    st.sidebar.success("**Legal Contract**: Loaded & Indexed (Static)")
 else:
     st.sidebar.warning("📚 **Legal Contract**: Not Indexed")
 
 st.sidebar.divider()
-st.sidebar.subheader("Document Ingestion")
+st.sidebar.subheader("Document Upload")
 
 # File Uploaders
 referral_file = st.sidebar.file_uploader("Upload Patient Referral (PDF)", type=["pdf"])
 invoice_file = st.sidebar.file_uploader("Upload Final Invoice (PDF)", type=["pdf"])
 
 # Main View
-st.markdown('<div class="main-header">Healthcare Auditing Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Automated Medical Billing Audit & Compliance Verification</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">Capstone</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header"> Healthcare Auditing Engine</div>', unsafe_allow_html=True)
 
 # Check if we can run
 can_audit = api_key and referral_file and invoice_file and st.session_state["contract_indexed"]
 
 if not can_audit:
     # Onboarding view
-    st.info("👋 Welcome! To begin the audit process, please upload the patient documents in the sidebar:")
-    cols = st.columns(2)
-    with cols[0]:
-        st.markdown("### 🩺 Step 1\nUpload the **Patient Referral PDF** in the sidebar.")
-    with cols[1]:
-        st.markdown("### 💵 Step 2\nUpload the **Final Medical Invoice PDF**, then click 'Run Audit'.")
+    st.info("Upload the **Patient Referral PDF** and **Final Medical Invoice PDF** in the sidebar.")
 else:
     # Display Action Button
     if st.button("🚀 Run Comprehensive Billing Audit", use_container_width=True):
-        with st.spinner("⏳ Extracting data and cross-referencing contract policy..."):
+        with st.spinner("⏳ Extracting data and cross-referencing with given contract policy..."):
             try:
                 # 1. Read files
                 ref_bytes = referral_file.read()
@@ -286,8 +280,6 @@ else:
                 # Clear chat history on new audit
                 st.session_state["chat_messages"] = []
                 
-                st.balloons()
-                
             except Exception as e:
                 st.error(f"Audit Execution Failed: {str(e)}")
 
@@ -303,18 +295,18 @@ if st.session_state["audit_results"] is not None:
     
     with col1:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown("#### Referral Extracted Data")
-        st.write(f"👤 **Patient Name**: {ref_data.get('patient_name')}")
-        st.write(f"📅 **Date of Birth**: {ref_data.get('dob')}")
-        st.write(f"🔬 **Approved Test**: `{ref_data.get('approved_test')}`")
-        st.write(f"🏢 **Authorized Facility**: `{ref_data.get('facility')}`")
+        st.markdown("#### 👤 Referral Extracted Data")
+        st.write(f" **Patient Name**: {ref_data.get('patient_name')}")
+        st.write(f" **Date of Birth**: {ref_data.get('dob')}")
+        st.write(f" **Approved Test**: `{ref_data.get('approved_test')}`")
+        st.write(f" **Authorized Facility**: `{ref_data.get('facility')}`")
         st.markdown('</div>', unsafe_allow_html=True)
         
     with col2:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.markdown("#### Invoice Extracted Data")
-        st.write(f"👤 **Patient Name**: {inv_data.get('patient_name')}")
-        st.write(f"💵 **Invoice Stated Total**: `${inv_data.get('total_amount'):,.2f}`")
+        st.markdown("#### 💵 Invoice Extracted Data")
+        st.write(f" **Patient Name**: {inv_data.get('patient_name')}")
+        st.write(f" **Invoice Stated Total**: `${inv_data.get('total_amount'):,.2f}`")
         st.markdown("**Billed Line Items:**")
         for item in inv_data.get("billed_services", []):
             st.write(f"- {item.get('item')}: `${item.get('cost'):,.2f}`")
@@ -362,12 +354,13 @@ if st.session_state["audit_results"] is not None:
         st.info(f"Historical audit logs found for patient {ref_data.get('patient_name')}:")
         for hist in history:
             ticket_status_color = "green" if hist["status"] == "Passed" else "red"
-            st.markdown(
-                f"- **Ticket #{hist['ticket_id']}** ({hist['created_at'][:10]}) | "
-                f"Test: `{hist['referral_test']}` | "
-                f"Total Billed: `${hist['invoice_total']:,.2f}` | "
-                f"Status: :**{ticket_status_color}[{hist['status']}]**"
-            )
+        st.markdown(
+            f"- **Ticket #{hist['ticket_id']}** ({hist['created_at'][:10]}) | "
+            f"Test: `{hist['referral_test']}` | "
+            f"Total Billed: `${hist['invoice_total']:,.2f}` | "
+            f"Status: <span style='color:{ticket_status_color}; font-weight:bold;'>{hist['status']}</span>",
+            unsafe_allow_html=True
+        )
     else:
         st.write("This is the first recorded audit ticket for this patient.")
         
