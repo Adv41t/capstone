@@ -94,10 +94,23 @@ class ContractRAGEngine:
         if not text.strip():
             raise ValueError("Contract text is empty. Cannot index.")
 
-        # Check if already indexed
-        if self.is_indexed() and not force:
-            logger.info("Contract is already indexed. Skipping re-indexing.")
+        import hashlib
+        contract_hash = hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+        # Check if already indexed and if hash matches
+        has_collection = self.is_indexed()
+        current_hash = None
+        if has_collection and self.collection.metadata:
+            current_hash = self.collection.metadata.get("contract_hash")
+
+        if has_collection and current_hash == contract_hash and not force:
+            logger.info("Contract is already indexed and unchanged. Skipping re-indexing.")
             return self.collection.count()
+
+        # If it is indexed but the hash doesn't match, we force re-indexing
+        if has_collection and current_hash != contract_hash:
+            logger.info("Contract content has changed. Forcing re-indexing.")
+            force = True
 
         try:
             if force:
@@ -107,11 +120,15 @@ class ContractRAGEngine:
                 except Exception:
                     pass  # If it doesn't exist, ignore
                 
-                # Re-create collection
+                # Re-create collection with hash in metadata
                 self.collection = self.client.get_or_create_collection(
                     name=self.collection_name,
-                    embedding_function=self.embedding_function
+                    embedding_function=self.embedding_function,
+                    metadata={"contract_hash": contract_hash}
                 )
+            else:
+                # If collection existed but had no hash, modify it to set the hash
+                self.collection.modify(metadata={"contract_hash": contract_hash})
 
             # Chunk the contract text
             chunks = chunk_text(text, chunk_size=250, overlap=50)

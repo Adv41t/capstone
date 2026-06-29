@@ -101,6 +101,59 @@ st.markdown("""
         font-size: 0.8rem;
         font-weight: bold;
     }
+    
+    /* Floating Chat Window style */
+    div[data-testid="vertical-block"]:has(> div [id="chat-window-anchor"]) {
+        position: fixed;
+        bottom: 100px;
+        right: 25px;
+        width: 380px;
+        background-color: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        z-index: 99999;
+        border: 1px solid #eaeaea;
+        padding: 15px;
+    }
+    
+    /* Floating Chat Button style */
+    div[data-testid="vertical-block"]:has(> div [id="chat-button-anchor"]) {
+        position: fixed;
+        bottom: 25px;
+        right: 25px;
+        z-index: 100000;
+    }
+    
+    /* Circle toggle button */
+    div[data-testid="vertical-block"]:has(> div [id="chat-button-anchor"]) button {
+        width: 60px !important;
+        height: 60px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;
+        font-size: 26px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    div[data-testid="vertical-block"]:has(> div [id="chat-button-anchor"]) button:hover {
+        transform: scale(1.08) !important;
+    }
+    
+    .chat-header {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+        padding: 12px 16px;
+        font-weight: bold;
+        border-radius: 8px 8px 0 0;
+        margin: -15px -15px 10px -15px;
+        font-size: 1.1rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -198,7 +251,7 @@ if api_key and not st.session_state["contract_indexed"]:
         except Exception as e:
             st.error(f"Failed to auto-index backend contract: {str(e)}")
     else:
-        st.error("Static contract file ('contract.pdf') was not found in the root directory.")
+        st.error(f"Static contract file ('{os.path.basename(STATIC_CONTRACT_PATH)}') was not found in the root directory.")
 
 # Sidebar config
 st.sidebar.title("Auditing Engine")
@@ -364,65 +417,85 @@ if st.session_state["audit_results"] is not None:
     else:
         st.write("This is the first recorded audit ticket for this patient.")
         
-    st.divider()
-    
-    # Interactive Chat Interface
-    st.subheader("💬 Auditor Assistant Chatbot")
-    st.write("Ask the assistant specific questions about this audit (e.g. why did a fee fail, or details of the contract pricing caps).")
-    
-    # Display previous messages
-    for msg in st.session_state["chat_messages"]:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+    # Floating Chatbot Interface
+    # 1. Floating Toggle Button (rendered at bottom-right if audit results exist)
+    with st.container():
+        st.markdown('<div id="chat-button-anchor"></div>', unsafe_allow_html=True)
+        button_label = "❌" if st.session_state.get("show_chat", False) else "Captsone AI💬"
+        if st.button(button_label, key="toggle_chat"):
+            st.session_state["show_chat"] = not st.session_state.get("show_chat", False)
+            st.rerun()
+
+    # 2. Floating Chat Window
+    if st.session_state.get("show_chat", False):
+        with st.container():
+            st.markdown('<div id="chat-window-anchor"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="chat-header">🩺 Captsone Assistant</div>', unsafe_allow_html=True)
             
-    # Input box
-    if user_query := st.chat_input("Enter your question here..."):
-        # Add user query to chat history
-        st.session_state["chat_messages"].append({"role": "user", "content": user_query})
-        with st.chat_message("user"):
-            st.write(user_query)
+            # Message container for scrolling
+            chat_container = st.container(height=350)
             
-        with st.spinner("Thinking..."):
-            try:
-                # Retrieve context from contract (RAG)
-                relevant_clauses = rag_engine.search_contract(user_query, n_results=3)
-                rag_context = "\n\n".join([f"Contract Clause:\n{rc['text']}" for rc in relevant_clauses])
+            with chat_container:
+                # Welcoming message if empty
+                if not st.session_state["chat_messages"]:
+                    st.info("Hello! Ask me any questions about this audit, such as patient details, billing discrepancies, or specific contract pricing policies.")
                 
-                # Build context
-                chatbot_context = (
-                    "You are an expert Medical Billing Audit Assistant. Your job is to help the auditor "
-                    "understand the audit results, patient details, and billing contract policy.\n\n"
-                    "=== PATIENT REFERRAL DATA ===\n"
-                    f"{json.dumps(ref_data, indent=2)}\n\n"
-                    "=== MEDICAL INVOICE DATA ===\n"
-                    f"{json.dumps(inv_data, indent=2)}\n\n"
-                    "=== 6-POINT AUDIT RESULT DETAILS ===\n"
-                    f"{json.dumps(results, indent=2)}\n\n"
-                    "=== RELEVANT LEGAL CONTRACT POLICY ===\n"
-                    f"{rag_context}\n\n"
-                    "Answer the user's question accurately using only the facts presented above. "
-                    "If the answer is not contained in the context, politely state that you do not "
-                    "have that information."
-                )
+                for msg in st.session_state["chat_messages"]:
+                    with st.chat_message(msg["role"]):
+                        st.write(msg["content"])
+            
+            # Chat input inside the widget
+            if user_query := st.chat_input("Ask a question...", key="widget_chat_input"):
+                # Render user message inside the container instantly
+                with chat_container:
+                    with st.chat_message("user"):
+                        st.write(user_query)
                 
-                # Query Gemini
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                chat_response = generate_content_with_retry(
-                    model,
-                    [
-                        chatbot_context,
-                        # Provide recent history for context
-                        *[f"{m['role'].upper()}: {m['content']}" for m in st.session_state["chat_messages"][-5:-1]],
-                        f"USER: {user_query}"
-                    ]
-                )
+                st.session_state["chat_messages"].append({"role": "user", "content": user_query})
                 
-                assistant_response = chat_response.text.strip()
-                
-                # Add assistant response to history
-                st.session_state["chat_messages"].append({"role": "assistant", "content": assistant_response})
-                with st.chat_message("assistant"):
-                    st.write(assistant_response)
-                    
-            except Exception as e:
-                st.error(f"Chat failed: {str(e)}")
+                # Generate and render assistant response instantly
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        with st.spinner("Thinking..."):
+                            try:
+                                # Retrieve context from contract (RAG)
+                                relevant_clauses = rag_engine.search_contract(user_query, n_results=3)
+                                rag_context = "\n\n".join([f"Contract Clause:\n{rc['text']}" for rc in relevant_clauses])
+                                
+                                # Build context
+                                chatbot_context = (
+                                    "You are an expert Medical Billing Audit Assistant. Your job is to help the auditor "
+                                    "understand the audit results, patient details, and billing contract policy.\n\n"
+                                    "=== PATIENT REFERRAL DATA ===\n"
+                                    f"{json.dumps(ref_data, indent=2)}\n\n"
+                                    "=== MEDICAL INVOICE DATA ===\n"
+                                    f"{json.dumps(inv_data, indent=2)}\n\n"
+                                    "=== 6-POINT AUDIT RESULT DETAILS ===\n"
+                                    f"{json.dumps(results, indent=2)}\n\n"
+                                    "=== RELEVANT LEGAL CONTRACT POLICY ===\n"
+                                    f"{rag_context}\n\n"
+                                    "Answer the user's question accurately using only the facts presented above. "
+                                    "If the answer is not contained in the context, politely state that you do not "
+                                    "have that information."
+                                )
+                                
+                                # Query Gemini
+                                model = genai.GenerativeModel("gemini-2.5-flash")
+                                chat_response = generate_content_with_retry(
+                                    model,
+                                    [
+                                        chatbot_context,
+                                        # Provide recent history for context
+                                        *[f"{m['role'].upper()}: {m['content']}" for m in st.session_state["chat_messages"][-5:-1]],
+                                        f"USER: {user_query}"
+                                    ]
+                                )
+                                
+                                assistant_response = chat_response.text.strip()
+                                st.write(assistant_response)
+                                
+                                st.session_state["chat_messages"].append({"role": "assistant", "content": assistant_response})
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Chat failed: {str(e)}")
