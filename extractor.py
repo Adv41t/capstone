@@ -38,8 +38,8 @@ class ReferralData(BaseModel):
     facility: str = Field(description="The specific clinic, hospital, or facility authorized to perform the test.")
 
 class BilledService(BaseModel):
-    item: str = Field(description="Description of the billed service, procedure, or fee.")
-    cost: float = Field(description="The cost/price charged for this specific service.")
+    item: str = Field(description="Description of the billed service, procedure, fee, adjustment, discount, or credit.")
+    cost: float = Field(description="The cost/price charged (use negative value for adjustments, discounts, or insurance credits that reduce the total).")
 
 class InvoiceData(BaseModel):
     patient_name: str = Field(description="Full name of the patient (First Last) listed on the invoice.")
@@ -115,8 +115,9 @@ class AuditExtractor:
         model = self._get_model()
         prompt = (
             "Analyze the following medical invoice/bill and extract the patient name, "
-            "all billed line items (each with an item description and cost), and the total "
-            "invoice amount stated on the bill.\n\n"
+            "all billed line items (each with an item description and cost—be sure to extract "
+            "adjustments, insurance write-offs, discounts, or credits with negative values if they "
+            "reduce the net total), and the final net total amount billed/due stated on the bill.\n\n"
             f"Invoice Document Content:\n{text}"
         )
 

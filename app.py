@@ -287,23 +287,38 @@ else:
                 ref_bytes = referral_file.read()
                 inv_bytes = invoice_file.read()
                 
-                raw_ref = file_reader.read_pdf(ref_bytes)
-                raw_inv = file_reader.read_pdf(inv_bytes)
+                raw_ref = ""
+                raw_inv = ""
+                pymupdf_success = False
+                pydantic_success = False
+                extraction_error = ""
+                
+                try:
+                    raw_ref = file_reader.read_pdf(ref_bytes)
+                    raw_inv = file_reader.read_pdf(inv_bytes)
+                    pymupdf_success = bool(raw_ref.strip() and raw_inv.strip())
+                except Exception as e:
+                    extraction_error = f"PyMuPDF failed: {str(e)}"
+                
+                ref_data = {}
+                inv_data = {}
+                if pymupdf_success:
+                    try:
+                        ref_data = extractor.extract_referral(raw_ref)
+                        inv_data = extractor.extract_invoice(raw_inv)
+                        pydantic_success = bool(ref_data and inv_data)
+                    except Exception as e:
+                        extraction_error = f"Pydantic extraction failed: {str(e)}"
                 
                 st.session_state["raw_referral_text"] = raw_ref
                 st.session_state["raw_invoice_text"] = raw_inv
-                
-                # 2. Extract structured JSON
-                ref_data = extractor.extract_referral(raw_ref)
-                inv_data = extractor.extract_invoice(raw_inv)
-                
                 st.session_state["referral_data"] = ref_data
                 st.session_state["invoice_data"] = inv_data
                 
                 # 3. Database Sync
-                patient_name = ref_data.get("patient_name")
-                dob = ref_data.get("dob")
-                approved_test = ref_data.get("approved_test")
+                patient_name = ref_data.get("patient_name") or "Unknown Patient (Extraction Failed)"
+                dob = ref_data.get("dob") or "Unknown"
+                approved_test = ref_data.get("approved_test") or "Unknown Test"
                 
                 # Save patient, open ticket
                 patient_id = database.get_or_create_patient(patient_name, dob)
@@ -314,10 +329,13 @@ else:
                 
                 # 4. Perform Audit Checklist
                 results = audit_engine.run_audit(
-                    ref_data, 
-                    inv_data, 
-                    raw_ref, 
-                    raw_inv
+                    referral_data=ref_data, 
+                    invoice_data=inv_data, 
+                    raw_referral_text=raw_ref, 
+                    raw_invoice_text=raw_inv,
+                    pymupdf_success=pymupdf_success,
+                    pydantic_success=pydantic_success,
+                    extraction_error=extraction_error
                 )
                 
                 st.session_state["audit_results"] = results
@@ -327,7 +345,7 @@ else:
                 final_status = "Failed" if any_fails else "Passed"
                 
                 # Update SQLite ticket
-                invoice_total = inv_data.get("total_amount", 0.0)
+                invoice_total = inv_data.get("total_amount", 0.0) if inv_data else 0.0
                 database.update_ticket(ticket_id, final_status, invoice_total, results)
                 
                 # Clear chat history on new audit
@@ -338,10 +356,14 @@ else:
 
 # Display audit results if they exist in session state
 if st.session_state["audit_results"] is not None:
-    ref_data = st.session_state["referral_data"]
-    inv_data = st.session_state["invoice_data"]
+    ref_data = st.session_state["referral_data"] or {}
+    inv_data = st.session_state["invoice_data"] or {}
     results = st.session_state["audit_results"]
     
+    # Warning banner if extraction failed
+    if not ref_data or not inv_data:
+        st.warning("⚠️ Some document data could not be extracted. Please check the 'Files fetched' status in the checklist below.")
+
     # Side by side comparison dashboard
     st.subheader("📋 Document Extractions")
     col1, col2 = st.columns(2)
@@ -349,20 +371,24 @@ if st.session_state["audit_results"] is not None:
     with col1:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.markdown("#### 👤 Referral Extracted Data")
-        st.write(f" **Patient Name**: {ref_data.get('patient_name')}")
-        st.write(f" **Date of Birth**: {ref_data.get('dob')}")
-        st.write(f" **Approved Test**: `{ref_data.get('approved_test')}`")
-        st.write(f" **Authorized Facility**: `{ref_data.get('facility')}`")
+        st.write(f" **Patient Name**: {ref_data.get('patient_name') or 'N/A'}")
+        st.write(f" **Date of Birth**: {ref_data.get('dob') or 'N/A'}")
+        st.write(f" **Approved Test**: `{ref_data.get('approved_test') or 'N/A'}`")
+        st.write(f" **Authorized Facility**: `{ref_data.get('facility') or 'N/A'}`")
         st.markdown('</div>', unsafe_allow_html=True)
         
     with col2:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.markdown("#### 💵 Invoice Extracted Data")
-        st.write(f" **Patient Name**: {inv_data.get('patient_name')}")
-        st.write(f" **Invoice Stated Total**: `${inv_data.get('total_amount'):,.2f}`")
+        st.write(f" **Patient Name**: {inv_data.get('patient_name') or 'N/A'}")
+        total_amount = inv_data.get('total_amount')
+        total_amount_str = f"${total_amount:,.2f}" if total_amount is not None else "N/A"
+        st.write(f" **Invoice Stated Total**: `{total_amount_str}`")
         st.markdown("**Billed Line Items:**")
         for item in inv_data.get("billed_services", []):
-            st.write(f"- {item.get('item')}: `${item.get('cost'):,.2f}`")
+            cost = item.get('cost', 0.0)
+            cost_str = f"-${abs(cost):,.2f}" if cost < 0 else f"${cost:,.2f}"
+            st.write(f"- {item.get('item')}: `{cost_str}`")
         st.markdown('</div>', unsafe_allow_html=True)
         
     st.divider()
