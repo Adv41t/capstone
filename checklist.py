@@ -73,9 +73,9 @@ class AuditChecklistEngine:
         if files_fetched_res["status"] == "Fail":
             remaining_checks = [
                 "Patient matched",
-                "Insurance applied?",
+                "Insurance applied",
                 "Test Matched",
-                "Allowed fees and pricing cap",
+                "Allowed fees and Pricing cap",
                 "Total calculation validation"
             ]
             for check in remaining_checks:
