@@ -247,7 +247,7 @@ class AuditChecklistEngine:
         Uses Gemini comparison for semantic validation.
         """
         approved_test = referral_data.get("approved_test", "").strip()
-        billed_services = invoice_data.get("billed_services", [])
+        test_billed = invoice_data.get("test_billed", "").strip()
 
         if not approved_test:
             return {
@@ -257,27 +257,25 @@ class AuditChecklistEngine:
                 "contract_clause_citation": "N/A (Standard Verification)"
             }
 
-        if not billed_services:
+        if not test_billed:
             return {
                 "check_name": "Test Matched",
                 "status": "Fail",
-                "reason": "No billed services found on the invoice.",
+                "reason": "Billed test name is missing from the invoice data.",
                 "contract_clause_citation": "N/A (Standard Verification)"
             }
 
         model = self._get_model()
-        billed_items_str = ", ".join([f"'{s.get('item')}'" for s in billed_services])
         prompt = (
             f"Authorized Test in Referral: '{approved_test}'\n"
-            f"Billed Items in Invoice: [{billed_items_str}]\n\n"
-            "Evaluate if the authorized test is present among the billed invoice items. "
-            "Note that the billed items may use slightly different wording, abbreviations, or codes "
+            f"Billed Test in Invoice: '{test_billed}'\n\n"
+            "Evaluate if the authorized test matches the billed test. "
+            "Note that they may use slightly different wording, abbreviations, or codes "
             "(e.g., 'Brain MRI' matches 'MRI - Brain without contrast').\n"
             "Return a JSON response matching this schema:\n"
             "{\n"
             '  "match": true/false,\n'
-            '  "reason": "explanation of mapping or failure",\n'
-            '  "matched_billed_item": "the matching item name from the billed list, or empty if none"\n'
+            '  "reason": "explanation of mapping or failure"\n'
             "}"
         )
         try:
@@ -298,19 +296,17 @@ class AuditChecklistEngine:
         except Exception as e:
             logger.error(f"Semantic test match failed: {str(e)}")
             # Fallback substring matching
-            for service in billed_services:
-                item = service.get("item", "")
-                if approved_test.lower() in item.lower() or item.lower() in approved_test.lower():
-                    return {
-                        "check_name": "Test Matched",
-                        "status": "Pass",
-                        "reason": f"Matched authorized test '{approved_test}' with billed service '{item}' (Fallback Match)",
-                        "contract_clause_citation": "N/A (Standard Verification)"
-                    }
+            if approved_test.lower() in test_billed.lower() or test_billed.lower() in approved_test.lower():
+                return {
+                    "check_name": "Test Matched",
+                    "status": "Pass",
+                    "reason": f"Matched authorized test '{approved_test}' with billed test '{test_billed}' (Fallback Match)",
+                    "contract_clause_citation": "N/A (Standard Verification)"
+                }
             return {
                 "check_name": "Test Matched",
                 "status": "Fail",
-                "reason": f"Authorized test '{approved_test}' could not be matched with any billed service.",
+                "reason": f"Authorized test '{approved_test}' could not be matched with billed test '{test_billed}'.",
                 "contract_clause_citation": "N/A (Standard Verification)"
             }
 

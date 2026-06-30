@@ -43,6 +43,7 @@ class BilledService(BaseModel):
 
 class InvoiceData(BaseModel):
     patient_name: str = Field(description="Full name of the patient (First Last) listed on the invoice.")
+    test_billed: str = Field(description="The name of the main medical test or procedure billed on the invoice (e.g., Complete Blood Count (CBC) with Differential, Lipid Panel, Brain MRI, etc.).")
     billed_services: List[BilledService] = Field(description="List of all services/items billed on the invoice.")
     total_amount: float = Field(description="The final total amount billed stated on the invoice.")
 
@@ -115,6 +116,7 @@ class AuditExtractor:
         model = self._get_model()
         prompt = (
             "Analyze the following medical invoice/bill and extract the patient name, "
+            "the specific test billed (typically found in clinical specimen & test details or as the main procedure description), "
             "all billed line items (each with an item description and cost—be sure to extract "
             "adjustments, insurance write-offs, discounts, or credits with negative values if they "
             "reduce the net total), and the final net total amount billed/due stated on the bill.\n\n"
