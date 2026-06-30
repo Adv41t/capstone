@@ -1,6 +1,6 @@
 # Healthcare Auditing Engine
 
-The **Healthcare Auditing Engine** is an automated compliance and billing audit platform designed to analyze, cross-reference, and validate medical bills against patient referrals and legal reimbursement contracts. 
+The **Capstone-Healthcare Auditing Engine** is an automated compliance and billing audit platform designed to analyze, cross-reference, and validate medical bills against patient referrals and legal reimbursement contracts. 
 
 By leveraging Large Language Models (LLMs) and Retrieval-Augmented Generation (RAG), the engine ensures patient details match, verifies insurance application, confirms that billed tests correspond to authorized referrals, checks pricing limits against contracted fee schedules, and validates mathematical calculations.
 
