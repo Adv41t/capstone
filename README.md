@@ -1,4 +1,4 @@
-# Healthcare Auditing Engine
+# Capstone
 
 The **Capstone-Healthcare Auditing Engine** is an automated compliance and billing audit platform designed to analyze, cross-reference, and validate medical bills against patient referrals and legal reimbursement contracts. 
 
