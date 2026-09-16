@@ -46,19 +46,13 @@ The engine executes a structured 6-point workflow and compliance checklist:
 
 ## Setup & Execution
 
-### 1. Configure the Environment
-Create a `.env` file in the `healthcare-auditor` directory and add your Google Gemini API key:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-### 2. Install Dependencies
+### 1. Install Dependencies
 Make sure you have python installed, then install the required libraries:
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the Dashboard
+### 2. Run the Dashboard
 Start the Streamlit application:
 ```bash
 streamlit run app.py
